@@ -1,0 +1,8 @@
+streamlit
+python-dotenv
+google-cloud-aiplatform
+langchain
+langchain-community
+langchain-chroma
+fastembed
+chromadb
