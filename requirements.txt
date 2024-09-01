@@ -6,4 +6,3 @@ langchain-community
 langchain-chroma
 fastembed
 chromadb
-gunicorn

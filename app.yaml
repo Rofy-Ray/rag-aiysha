@@ -1,5 +1,2 @@
-runtime: python312
-runtime_config:
-  python_version: 3
-entrypoint: bash -c "export PYTHONUNBUFFERED=true && python3 -m pip install -U pip && python3 -m pip install -r requirements.txt && streamlit run app.py"
-service: rag-aiysha
+runtime: custom
+env: flex
