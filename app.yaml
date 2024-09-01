@@ -1,3 +1,12 @@
 runtime: custom
 env: flex
 service: rag-aiysha
+handlers:
+- url: /.*
+  script: app.py
+  secure: always
+  auth_fail_action: redirect
+  http_headers:
+    Access-Control-Allow-Origin: '*'
+    Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+    Access-Control-Allow-Headers: Content-Type, Authorization
