@@ -1,3 +1,4 @@
+from functools import lru_cache
 from langchain_chroma import Chroma
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 import os
@@ -10,6 +11,7 @@ CHROMA_PATH = "data/db"
 
 embedding_function = FastEmbedEmbeddings()
 
+@lru_cache(maxsize=1)
 def get_vector_store():
     if not os.path.exists(CHROMA_PATH):
         logger.warning(f"Chroma database not found at {CHROMA_PATH}. Creating a new one.")
@@ -32,8 +34,7 @@ def add_to_chroma(chunks):
     else:
         logging.info("No new documents to add to the vector store.")
 
-def query_vector_store(query: str, k: int = 3):
-    db = get_vector_store()
+def query_vector_store(query: str, db, k: int = 3):
     logger.info(f"Number of documents in the vector store: {db._collection.count()}")
     results = db.similarity_search_with_score(query, k=k)
     if not results:

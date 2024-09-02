@@ -1,3 +1,4 @@
+import streamlit as st
 from google.cloud import aiplatform
 import os
 import re
@@ -24,25 +25,10 @@ Please respond with complete sentences and keep your responses under 280 charact
 <</SYS>>
 """
 
-def get_llama_response(input_data):
+@st.cache_resource
+def get_ai_client():
     client_options = {"api_endpoint": API_ENDPOINT}
-    client = aiplatform.gapic.PredictionServiceClient(client_options=client_options)
-    endpoint = client.endpoint_path(
-        project=PROJECT, location=LOCATION, endpoint=ENDPOINT_ID
-    )
-    instances = [
-        {"inputs": input_data, 
-         "parameters": {"max_tokens": 500, "temperature": 0}
-        }
-    ]
-    response = client.predict(endpoint=endpoint, instances=instances)
-    return response.predictions[0]
-
-# def get_llama_response(input_data):
-#     aiplatform.init(project=PROJECT, location=LOCATION)
-#     endpoint = aiplatform.Endpoint(ENDPOINT_ID)
-#     response = endpoint.predict(instances=[{"inputs": input_data}])
-#     return response.predictions[0]
+    return aiplatform.gapic.PredictionServiceClient(client_options=client_options)
 
 def format_llama_prompt(message: str, context: str) -> str:
     formatted_prompt = f"""{SYSTEM_PROMPT}\nGiven the following context, please answer the question. If the answer is not in the context, use your knowledge as Aiysha to provide a relevant response.\n\nContext: {context}\n\nQuestion: {message} [/INST]</s>"""
@@ -51,12 +37,16 @@ def format_llama_prompt(message: str, context: str) -> str:
 def get_model_response(message: str, context: str):
     query = format_llama_prompt(message, context)
     logger.info(f"FORMATTED PROMPT: {query}")
-    generated_text = get_llama_response(query)
-           
+    
+    client = get_ai_client()
+    endpoint = client.endpoint_path(project=PROJECT, location=LOCATION, endpoint=ENDPOINT_ID)
+    instances = [{"inputs": query, "parameters": {"max_tokens": 500, "temperature": 0}}]
+    
+    response = client.predict(endpoint=endpoint, instances=instances)
+    generated_text = response.predictions[0] if response.predictions else None
+    
     if generated_text:
-        response = generated_text
-        logger.info(f"MODEL RESPONSE: {response}")
+        logger.info(f"MODEL RESPONSE: {generated_text}")
+        return generated_text
     else:
-        response = "I'm sorry, I couldn't generate a response. Please try again."
-
-    return response
+        return "I'm sorry, I couldn't generate a response. Please try again."
