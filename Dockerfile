@@ -1,15 +1,17 @@
-FROM python:3.11
+FROM python:3
 
-WORKDIR /app
+ENV PYTHONUNBUFFERED True
 
-COPY requirements.txt ./requirements.txt
+EXPOSE 8080
+
+ENV APP_HOME /app
+
+WORKDIR $APP_HOME
+
+COPY . ./
 
 RUN pip install --upgrade pip
 
 RUN pip install -r requirements.txt
 
-EXPOSE 8080
-
-COPY . /app
-
-CMD streamlit run --server.port 8080 app.py
+CMD streamlit run --server.port 8080 --server.enableCORS false app.py
