@@ -31,6 +31,8 @@ def check_and_process_new_pdfs():
     processed_count = process_new_pdfs()
     if processed_count > 0:
         return True, f"I have {processed_count} beauty bot(s) busy blending and perfecting! Just like a good contour, it takes a little time to get it right."
+    else:
+        return False, ""
     
 st.set_page_config(page_title="Aiysha from yShade.AI", layout="wide")
 
