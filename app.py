@@ -74,7 +74,5 @@ if prompt := st.chat_input("My name is Aiysha! How can I assist you?"):
 
     st.session_state.messages.append({"role": "assistant", "content": response})
 
-save_chat_history(st.session_state.messages)
-
 with shelve.open("data/history/chat_history") as db:
     db["messages"] = st.session_state.messages
