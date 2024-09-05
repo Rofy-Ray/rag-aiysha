@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import shelve
 import logging
+from PIL import Image
 from llm_interface import get_model_response
 from pdf_processor import process_new_pdfs
 from vector_store import query_vector_store
@@ -34,7 +35,42 @@ def check_and_process_new_pdfs():
     else:
         return False, ""
     
-st.set_page_config(page_title="Aiysha from yShade.AI", layout="wide")
+@st.cache_data
+def load_image(image_path, size=(150, 150)):
+    img = Image.open(image_path)
+    # img = img.resize(size)
+    return img
+    
+st.set_page_config(
+    page_title="Aiysha from yShade.AI",
+    page_icon="images/yshadelogobig.png",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items=None  
+)
+
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #0E1117;
+        color: #FAFAFA;
+    }
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
+
+with st.sidebar:
+    logo = load_image("images/yshadelogo.png") 
+    st.image(logo, use_column_width=True)
+
+    st.header("About Me")
+    st.write("""
+    Hi, I'm Aiysha, your AI beauty assistant from yShade.AI. 
+    I'm here to help you with all your beauty-related questions and needs. 
+    Whether you're looking for product recommendations, makeup tips, 
+    or skincare advice, I'm at your service!
+    """)
 
 st.title("Aiysha from yShade.AI")
 
