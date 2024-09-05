@@ -68,8 +68,14 @@ with st.sidebar:
     st.write("""
     Hi, I'm Aiysha, your AI beauty assistant from yShade.AI. 
     I'm here to help you with all your beauty-related questions and needs. 
-    Whether you're looking for product recommendations, makeup tips, 
-    or skincare advice, I'm at your service!
+    Do you want the steps to recreate a particular makeup look? I'm at your service!
+    """)
+    
+    st.header("Coming Soon")
+    st.write("""
+    I will help you with virtual try-on (VTO) for hair, lipstick/lip gloss and others. 
+    I will provide you with custom product recommendations like finding the perfect shade of foundation, concealer and other makeup products based on your unique skin shade and undertones.
+    You can chat with me via speech and I will talk back to you.
     """)
 
 st.title("Aiysha from yShade.AI")
@@ -98,9 +104,12 @@ if prompt := st.chat_input("My name is Aiysha! How can I assist you?"):
 
     with st.chat_message("assistant", avatar=BOT_AVATAR):
         with st.spinner("Thinking..."):
-            processing_status, message = check_and_process_new_pdfs()
-            if processing_status:
-                st.info(f"Hold on. {message}")
+            try:
+                processing_status, message = check_and_process_new_pdfs()
+                if processing_status:
+                    st.info(f"Hold on. {message}")
+            except Exception as e:
+                logger.error(f"PDF processing error: {str(e)}", exc_info=True)
         
         message_placeholder = st.empty()
         vector_store = get_vector_store()
