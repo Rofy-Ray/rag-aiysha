@@ -66,15 +66,15 @@ with st.sidebar:
 
     st.header("About Me")
     st.write("""
-    Hi, I'm Aiysha, your AI beauty assistant from yShade.AI. 
-    I'm here to help you with all your beauty-related questions and needs. 
+    Hi, I'm Aiysha, your AI beauty assistant from yShade.AI.\n 
+    I'm here to help you with all your beauty-related questions and needs.\n 
     Do you want the steps to recreate a particular makeup look? I'm at your service!
     """)
     
     st.header("Coming Soon")
     st.write("""
-    I will help you with virtual try-on (VTO) for hair, lipstick/lip gloss and others. 
-    I will provide you with custom product recommendations like finding the perfect shade of foundation, concealer and other makeup products based on your unique skin shade and undertones.
+    I will help you with virtual try-on (VTO) for hair, lipstick/lip gloss and others.\n 
+    I will provide you with custom product recommendations like finding the perfect shade of foundation, concealer and other makeup products based on your unique skin shade and undertones.\n
     You can chat with me via speech and I will talk back to you.
     """)
 
