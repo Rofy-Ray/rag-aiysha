@@ -14,6 +14,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DATA_PATH = "data/pdf/new"
+CONVERSATION_TRACK_FILE = "data/history/conversations.txt"
 
 @st.cache_resource
 def get_vector_store():
@@ -40,6 +41,19 @@ def load_image(image_path, size=(150, 150)):
     img = Image.open(image_path)
     # img = img.resize(size)
     return img
+
+def update_conversation_count():
+    if not os.path.exists(CONVERSATION_TRACK_FILE):
+        with open(CONVERSATION_TRACK_FILE, 'w') as f:
+            f.write("queries: 0\nresponses: 0")
+    with open(CONVERSATION_TRACK_FILE, 'r') as f:
+        lines = f.readlines()
+    user_count = int(lines[0].split(': ')[1])
+    model_count = int(lines[1].split(': ')[1])
+    user_count += 1
+    model_count += 1
+    with open(CONVERSATION_TRACK_FILE, 'w') as f:
+        f.write(f"queries: {user_count}\nresponses: {model_count}")
     
 st.set_page_config(
     page_title="Aiysha from yShade.AI",
@@ -120,6 +134,8 @@ if prompt := st.chat_input("My name is Aiysha! How can I assist you?"):
         message_placeholder.markdown(response)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
+    
+    update_conversation_count()
 
 with shelve.open("data/history/chat_history") as db:
     db["messages"] = st.session_state.messages
