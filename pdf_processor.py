@@ -1,5 +1,4 @@
 import os
-import shutil
 from langchain_community.document_loaders.pdf import PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.schema.document import Document
@@ -11,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 DATA_PATH = "data/pdf/new"
 PROCESSED_PATH = "data/pdf/processed"
+VECTORIZED_FILE = os.path.join(PROCESSED_PATH, "vectorized.txt")
 
 def load_documents():
     document_loader = PyPDFDirectoryLoader(DATA_PATH)
@@ -53,14 +53,29 @@ def process_new_pdfs():
     
     processed_files = set()
     
+    current_count = 0
+    processed_pdfs = []
+    if os.path.exists(VECTORIZED_FILE):
+        with open(VECTORIZED_FILE, 'r') as f:
+            lines = f.readlines()
+            if lines:
+                current_count = int(lines[0].strip())
+                processed_pdfs = [line.strip() for line in lines[1:]]
+    
     for doc in documents:
         source = doc.metadata.get("source")
         if source and source not in processed_files:
             try:
-                destination = os.path.join(PROCESSED_PATH, os.path.basename(source))
-                shutil.move(source, destination)
+                os.remove(source)
                 processed_files.add(source)
-                logger.info(f"Moved file: {source} to {destination}")
+                processed_pdfs.append(os.path.basename(source))
+                logger.info(f"Processed and deleted file: {source}")
             except Exception as e:
                 logger.error(f"Error processing file {source}: {str(e)}")
+    new_count = current_count + len(processed_files)
+    with open(VECTORIZED_FILE, 'w') as f:
+        f.write(f"{new_count}\n")
+        for pdf in processed_pdfs:
+            f.write(f"{pdf}\n")
+    logger.info(f"Updated vectorized.txt with {len(processed_files)} new files. Total count: {new_count}")
     return len(processed_files)
