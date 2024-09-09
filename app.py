@@ -59,20 +59,18 @@ st.set_page_config(
     page_title="Aiysha from yShade.AI",
     page_icon="images/yshadelogobig.png",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
     menu_items=None  
 )
 
-st.markdown("""
-    <style>
-    .stApp {
-        background-color: #0E1117;
-        color: #FAFAFA;
-    }
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    </style>
-    """, unsafe_allow_html=True)
+streamlit_style = """
+			<style>
+                #MainMenu {visibility: hidden;}
+                footer {visibility: hidden;}
+			</style>
+		"""
+   
+st.markdown(streamlit_style, unsafe_allow_html=True)
 
 with st.sidebar:
     logo = load_image("images/yshadelogo.png") 
@@ -80,16 +78,15 @@ with st.sidebar:
 
     st.header("About Me")
     st.write("""
-    Hi, I'm Aiysha, your AI beauty assistant from yShade.AI.\n 
-    I'm here to help you with all your beauty-related questions and needs.\n 
-    Do you want the steps to recreate a particular makeup look? I'm at your service!
+    Hi, I'm Aiysha, your AI beauty assistant from yShade.AI, here to help with all your beauty-related questions.\n 
+    Need steps to recreate a makeup look? I'm at your service!
     """)
     
     st.header("Coming Soon")
     st.write("""
-    I will help you with virtual try-on (VTO) for hair, lipstick/lip gloss and others.\n 
-    I will provide you with custom product recommendations like finding the perfect shade of foundation, concealer and other makeup products based on your unique skin shade and undertones.\n
-    You can chat with me via speech and I will talk back to you.
+    I’ll assist with virtual try-ons for hair, lipstick, and more.\n
+    Get personalized product recommendations, like the perfect foundation and concealer for your skin tone.\n
+    You can even chat with me via speech, and I’ll respond!
     """)
 
 st.title("Aiysha from yShade.AI")
