@@ -1,8 +1,0 @@
-.env
-.git
-.gitignore
-.gcloudignore
-.rag
-.DS_Store
-__pycache__
-.dockerignore
