@@ -16,4 +16,4 @@ RUN pip install --upgrade pip
 
 RUN pip install -r requirements.txt
 
-CMD streamlit run --server.port 8080 --server.enableCORS true app.py
+CMD streamlit run --server.port 8080 --server.enableCORS true --config .streamlit/config.toml app.py
