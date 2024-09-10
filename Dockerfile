@@ -8,9 +8,9 @@ ENV APP_HOME /app
 
 WORKDIR $APP_HOME
 
-COPY .streamlit .streamlit/
-
 COPY . ./
+
+COPY .streamlit/ $APP_HOME/.streamlit/
 
 RUN pip install --upgrade pip
 
