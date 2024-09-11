@@ -7,6 +7,7 @@ from llm_interface import get_model_response
 from pdf_processor import process_new_pdfs
 from vector_store import query_vector_store
 from dotenv import load_dotenv
+from google.cloud import storage
 
 load_dotenv()
 
@@ -14,7 +15,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DATA_PATH = "data/pdf/new"
-CONVERSATION_TRACK_FILE = "data/history/conversations.txt"
+BUCKET_NAME = "aiysha-convos" 
+CONVERSATION_TRACK_BLOB = "conversations.txt"
+
+client = storage.Client()
+bucket = client.bucket(BUCKET_NAME)
 
 @st.cache_resource
 def get_vector_store():
@@ -43,17 +48,25 @@ def load_image(image_path, size=(150, 150)):
     return img
 
 def update_conversation_count():
-    if not os.path.exists(CONVERSATION_TRACK_FILE):
-        with open(CONVERSATION_TRACK_FILE, 'w') as f:
-            f.write("queries: 0\nresponses: 0")
-    with open(CONVERSATION_TRACK_FILE, 'r') as f:
-        lines = f.readlines()
-    user_count = int(lines[0].split(': ')[1])
-    model_count = int(lines[1].split(': ')[1])
-    user_count += 1
-    model_count += 1
-    with open(CONVERSATION_TRACK_FILE, 'w') as f:
-        f.write(f"queries: {user_count}\nresponses: {model_count}")
+    blob = bucket.blob(CONVERSATION_TRACK_BLOB)
+    
+    if not blob.exists():
+        blob.upload_from_string("queries: 0\nresponses: 0")
+    
+    try:
+        content = blob.download_as_text()
+        lines = content.split('\n')
+        
+        queries = int(lines[0].split(': ')[1])
+        responses = int(lines[1].split(': ')[1])
+        
+        queries += 1
+        responses += 1
+        
+        new_content = f"queries: {queries}\nresponses: {responses}"
+        blob.upload_from_string(new_content)
+    except Exception as e:
+        logger.error(f"Error updating conversation count: {e}")
     
 st.set_page_config(
     page_title="Aiysha from yShade.AI",
