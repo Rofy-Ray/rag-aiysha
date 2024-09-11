@@ -1,2 +1,0 @@
-queries: 0
-responses: 0
