@@ -7,7 +7,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.schema.document import Document
 from vector_store import add_to_chroma
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -22,11 +21,38 @@ def load_documents():
     documents = []
     blobs = bucket.list_blobs(prefix=DATA_PATH)
     for blob in blobs:
-        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-            blob.download_to_filename(temp_file.name)
-            loader = PyPDFLoader(temp_file.name)
-            documents.extend(loader.load())
-            os.unlink(temp_file.name)
+        if blob.name.lower().endswith('.pdf'):
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+                try:
+                    logger.info(f"Downloading blob: {blob.name}")
+                    blob.download_to_filename(temp_file.name)
+                    
+                    if os.path.getsize(temp_file.name) == 0:
+                        logger.warning(f"Empty file downloaded: {blob.name}")
+                        continue
+                    
+                    logger.info(f"Loading PDF: {temp_file.name}")
+                    loader = PyPDFLoader(temp_file.name)
+                    pdf_documents = loader.load()
+                    
+                    if not pdf_documents:
+                        logger.warning(f"No content extracted from PDF: {blob.name}")
+                    else:
+                        for doc in pdf_documents:
+                            doc.metadata["source"] = blob.name
+                        documents.extend(pdf_documents)
+                        logger.info(f"Successfully processed PDF: {blob.name}")
+                
+                except Exception as e:
+                    logger.error(f"Error processing {blob.name}: {str(e)}")
+                
+                finally:
+                    try:
+                        os.unlink(temp_file.name)
+                    except Exception as e:
+                        logger.error(f"Error deleting temporary file {temp_file.name}: {str(e)}")
+    
+    logger.info(f"Total documents loaded: {len(documents)}")
     return documents
 
 def split_documents(documents: list[Document]):
@@ -79,15 +105,19 @@ def process_new_pdfs():
                     processed_pdfs = [line.strip() for line in lines[1:]]
             os.unlink(temp_file.name)
     
-    for doc in documents:
-        source = doc.metadata.get("source")
-        if source and source not in processed_files:
+    unique_sources = set(doc.metadata.get("source") for doc in documents if doc.metadata.get("source"))
+    
+    for source in unique_sources:
+        if source.startswith(DATA_PATH):
             try:
-                blob = bucket.blob(f"{DATA_PATH}{os.path.basename(source)}")
-                blob.delete()
-                processed_files.add(source)
-                processed_pdfs.append(os.path.basename(source))
-                logger.info(f"Processed and deleted file: {source}")
+                blob = bucket.blob(source)
+                if blob.exists():
+                    blob.delete()
+                    processed_files.add(source)
+                    processed_pdfs.append(os.path.basename(source))
+                    logger.info(f"Processed and deleted file: {source}")
+                else:
+                    logger.warning(f"File not found in bucket: {source}")
             except Exception as e:
                 logger.error(f"Error processing file {source}: {str(e)}")
                 

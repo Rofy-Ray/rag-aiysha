@@ -5,7 +5,7 @@ import logging
 from PIL import Image
 from llm_interface import get_model_response
 from pdf_processor import process_new_pdfs
-from vector_store import query_vector_store, cleanup
+from vector_store import query_vector_store, get_vector_store, cleanup
 from dotenv import load_dotenv
 from google.cloud import storage
 
@@ -22,20 +22,13 @@ CHAT_HISTORY_BLOB = "history/chat_history.json"
 client = storage.Client()
 bucket = client.bucket(BUCKET_NAME)
 
-if 'needs_cleanup' not in st.session_state:
-    st.session_state.needs_cleanup = False
+if 'initialized' not in st.session_state:
+    st.session_state.initialized = False
+    st.session_state.vector_store = None
 
-if st.session_state.needs_cleanup:
-    cleanup()
-    st.session_state.needs_cleanup = False
-    st.rerun()
-
-st.session_state.needs_cleanup = True
-
-@st.cache_resource
-def get_vector_store():
-    from vector_store import get_vector_store
-    return get_vector_store()
+if not st.session_state.initialized:
+    st.session_state.initialized = True
+    st.session_state.vector_store = get_vector_store()
 
 @st.cache_data
 def load_chat_history():
@@ -49,7 +42,6 @@ def save_chat_history(messages):
     blob = bucket.blob(CHAT_HISTORY_BLOB)
     blob.upload_from_string(json.dumps(messages))
 
-@st.cache_data
 def check_and_process_new_pdfs():
     blobs = list(bucket.list_blobs(prefix=DATA_PATH))
     if not blobs:
@@ -63,7 +55,6 @@ def check_and_process_new_pdfs():
 @st.cache_data
 def load_image(image_path, size=(150, 150)):
     img = Image.open(image_path)
-    # img = img.resize(size)
     return img
 
 def update_conversation_count():
@@ -133,6 +124,7 @@ with st.sidebar:
     if st.button("Delete Chat History"):
         st.session_state.messages = []
         save_chat_history([])
+        cleanup()
 
 for message in st.session_state.messages:
     avatar = USER_AVATAR if message["role"] == "user" else BOT_AVATAR
@@ -154,8 +146,7 @@ if prompt := st.chat_input("My name is Aiysha! How can I assist you?"):
                 logger.error(f"PDF processing error: {str(e)}", exc_info=True)
         
         message_placeholder = st.empty()
-        vector_store = get_vector_store()
-        context = query_vector_store(prompt, vector_store)
+        context = query_vector_store(prompt, st.session_state.vector_store)
         logger.info(f"FETCHED CONTEXT: {context}")
         with st.spinner(""):
             response = get_model_response(prompt, context, st.session_state.messages)
@@ -166,5 +157,3 @@ if prompt := st.chat_input("My name is Aiysha! How can I assist you?"):
     update_conversation_count()
 
     save_chat_history(st.session_state.messages)
-    
-st.session_state.needs_cleanup = True

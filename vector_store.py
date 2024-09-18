@@ -80,5 +80,8 @@ def clear_database():
     logger.info(f"Cleared local temporary directory at {LOCAL_TEMP_DIR}")
 
 def cleanup():
-    shutil.rmtree(LOCAL_TEMP_DIR)
-    logger.info(f"Cleaned up temporary directory at {LOCAL_TEMP_DIR}")
+    if os.path.exists(LOCAL_TEMP_DIR):
+        shutil.rmtree(LOCAL_TEMP_DIR)
+        logger.info(f"Cleaned up temporary directory at {LOCAL_TEMP_DIR}")
+    else:
+        logger.info(f"Temporary directory {LOCAL_TEMP_DIR} does not exist, no cleanup needed")
