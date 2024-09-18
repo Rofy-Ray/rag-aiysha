@@ -1,20 +1,33 @@
 import os
-from langchain_community.document_loaders.pdf import PyPDFDirectoryLoader
+import logging
+import tempfile
+from google.cloud import storage
+from langchain_community.document_loaders.pdf import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.schema.document import Document
 from vector_store import add_to_chroma
-import logging
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DATA_PATH = "data/pdf/new"
-PROCESSED_PATH = "data/pdf/processed"
-VECTORIZED_FILE = os.path.join(PROCESSED_PATH, "vectorized.txt")
+BUCKET_NAME = "aiysha-convos"
+DATA_PATH = "pdf/new/"
+VECTORIZED_FILE = "pdf/processed/vectorized.txt"
+
+storage_client = storage.Client()
+bucket = storage_client.bucket(BUCKET_NAME)
 
 def load_documents():
-    document_loader = PyPDFDirectoryLoader(DATA_PATH)
-    return document_loader.load()
+    documents = []
+    blobs = bucket.list_blobs(prefix=DATA_PATH)
+    for blob in blobs:
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            blob.download_to_filename(temp_file.name)
+            loader = PyPDFLoader(temp_file.name)
+            documents.extend(loader.load())
+            os.unlink(temp_file.name)
+    return documents
 
 def split_documents(documents: list[Document]):
     text_splitter = RecursiveCharacterTextSplitter(
@@ -55,27 +68,37 @@ def process_new_pdfs():
     
     current_count = 0
     processed_pdfs = []
-    if os.path.exists(VECTORIZED_FILE):
-        with open(VECTORIZED_FILE, 'r') as f:
-            lines = f.readlines()
-            if lines:
-                current_count = int(lines[0].strip())
-                processed_pdfs = [line.strip() for line in lines[1:]]
+    vectorized_blob = bucket.blob(VECTORIZED_FILE)
+    if vectorized_blob.exists():
+        with tempfile.NamedTemporaryFile(mode='w+t', delete=False) as temp_file:
+            vectorized_blob.download_to_filename(temp_file.name)
+            with open(temp_file.name, 'r') as f:
+                lines = f.readlines()
+                if lines:
+                    current_count = int(lines[0].strip())
+                    processed_pdfs = [line.strip() for line in lines[1:]]
+            os.unlink(temp_file.name)
     
     for doc in documents:
         source = doc.metadata.get("source")
         if source and source not in processed_files:
             try:
-                os.remove(source)
+                blob = bucket.blob(f"{DATA_PATH}{os.path.basename(source)}")
+                blob.delete()
                 processed_files.add(source)
                 processed_pdfs.append(os.path.basename(source))
                 logger.info(f"Processed and deleted file: {source}")
             except Exception as e:
                 logger.error(f"Error processing file {source}: {str(e)}")
+                
     new_count = current_count + len(processed_files)
-    with open(VECTORIZED_FILE, 'w') as f:
-        f.write(f"{new_count}\n")
+    with tempfile.NamedTemporaryFile(mode='w+t', delete=False) as temp_file:
+        temp_file.write(f"{new_count}\n")
         for pdf in processed_pdfs:
-            f.write(f"{pdf}\n")
+            temp_file.write(f"{pdf}\n")
+        temp_file.flush()
+        vectorized_blob.upload_from_filename(temp_file.name)
+        os.unlink(temp_file.name)
+        
     logger.info(f"Updated vectorized.txt with {len(processed_files)} new files. Total count: {new_count}")
     return len(processed_files)

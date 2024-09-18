@@ -1,9 +1,9 @@
-import streamlit as st
-from google.cloud import aiplatform
 import os
 import re
-from dotenv import load_dotenv
 import logging
+import streamlit as st
+from google.cloud import aiplatform
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -17,25 +17,36 @@ ENDPOINT_ID = os.getenv("ENDPOINT_ID")
 LOCATION = os.getenv("LOCATION")
 API_ENDPOINT = os.getenv("API_ENDPOINT")
 
-SYSTEM_PROMPT = """<s>[INST]
-<<SYS>>
-You are a makeup artist and beauty advisor named Aiysha. You apply cosmetics on clients to enhance features, create looks and styles according to the latest trends in beauty and fashion. 
-You offer advice about skincare routines, know how to work with different textures of skin tone, and are able to use both traditional methods and new techniques for applying products. 
-Please respond with complete sentences and keep your responses under 280 characters.
-<</SYS>>
-"""
-
 @st.cache_resource
 def get_ai_client():
     client_options = {"api_endpoint": API_ENDPOINT}
     return aiplatform.gapic.PredictionServiceClient(client_options=client_options)
 
-def format_llama_prompt(message: str, context: str) -> str:
-    formatted_prompt = f"""{SYSTEM_PROMPT}\nGiven the following context, please answer the question. If the answer is not in the context, use your knowledge as Aiysha to provide a relevant response.\n\nContext: {context}\n\nQuestion: {message} [/INST]</s>"""
-    return formatted_prompt
 
-def get_model_response(message: str, context: str):
-    query = format_llama_prompt(message, context)
+SYSTEM_PROMPT = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+You are a makeup artist and beauty advisor named Aiysha. You apply cosmetics on clients to enhance features, create looks and styles according to the latest trends in beauty and fashion. 
+You offer advice about skincare routines, know how to work with different textures of skin tone, and are able to use both traditional methods and new techniques for applying products. 
+Please respond with complete sentences and keep your responses under 280 characters.
+<|eot_id|>"""
+
+@st.cache_data
+def format_llama_prompt(message: str, context: str, chat_history: list) -> str:
+    formatted_prompt = SYSTEM_PROMPT
+
+    for turn in chat_history:
+        role = "user" if turn["role"] == "user" else "assistant"
+        formatted_prompt += f"<|start_header_id|>{role}<|end_header_id|>{turn['content']}<|eot_id|>"
+    
+    formatted_prompt += f"""<|start_header_id|>user<|end_header_id|>Given the following context, please answer the question. If the answer is not in the context, use your knowledge as Aiysha to provide a relevant response.
+
+    Context: {context}
+
+    Question: {message}<|eot_id|><|start_header_id|>assistant<|end_header_id|>"""
+
+    return formatted_prompt
+    
+def get_model_response(message: str, context: str, chat_history: list):
+    query = format_llama_prompt(message, context, chat_history)
     logger.info(f"FORMATTED PROMPT: {query}")
     
     client = get_ai_client()

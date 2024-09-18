@@ -1,11 +1,11 @@
 import streamlit as st
 import os
-import shelve
+import json
 import logging
 from PIL import Image
 from llm_interface import get_model_response
 from pdf_processor import process_new_pdfs
-from vector_store import query_vector_store
+from vector_store import query_vector_store, cleanup
 from dotenv import load_dotenv
 from google.cloud import storage
 
@@ -14,12 +14,23 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DATA_PATH = "data/pdf/new"
-BUCKET_NAME = "aiysha-convos" 
-CONVERSATION_TRACK_BLOB = "conversations.txt"
+DATA_PATH = "pdf/new/"
+BUCKET_NAME = "aiysha-convos"
+CONVERSATION_TRACK_BLOB = "history/conversations.txt"
+CHAT_HISTORY_BLOB = "history/chat_history.json"
 
 client = storage.Client()
 bucket = client.bucket(BUCKET_NAME)
+
+if 'needs_cleanup' not in st.session_state:
+    st.session_state.needs_cleanup = False
+
+if st.session_state.needs_cleanup:
+    cleanup()
+    st.session_state.needs_cleanup = False
+    st.rerun()
+
+st.session_state.needs_cleanup = True
 
 @st.cache_resource
 def get_vector_store():
@@ -28,12 +39,20 @@ def get_vector_store():
 
 @st.cache_data
 def load_chat_history():
-    with shelve.open("data/history/chat_history") as db:
-        return db.get("messages", [])
+    blob = bucket.blob(CHAT_HISTORY_BLOB)
+    if blob.exists():
+        return json.loads(blob.download_as_text())
+    return []
+
+@st.cache_data
+def save_chat_history(messages):
+    blob = bucket.blob(CHAT_HISTORY_BLOB)
+    blob.upload_from_string(json.dumps(messages))
 
 @st.cache_data
 def check_and_process_new_pdfs():
-    if not os.listdir(DATA_PATH):
+    blobs = list(bucket.list_blobs(prefix=DATA_PATH))
+    if not blobs:
         return False, ""
     processed_count = process_new_pdfs()
     if processed_count > 0:
@@ -113,8 +132,7 @@ if "messages" not in st.session_state:
 with st.sidebar:
     if st.button("Delete Chat History"):
         st.session_state.messages = []
-        with shelve.open("data/history/chat_history") as db:
-            db["messages"] = []
+        save_chat_history([])
 
 for message in st.session_state.messages:
     avatar = USER_AVATAR if message["role"] == "user" else BOT_AVATAR
@@ -140,12 +158,13 @@ if prompt := st.chat_input("My name is Aiysha! How can I assist you?"):
         context = query_vector_store(prompt, vector_store)
         logger.info(f"FETCHED CONTEXT: {context}")
         with st.spinner(""):
-            response = get_model_response(prompt, context)
+            response = get_model_response(prompt, context, st.session_state.messages)
         message_placeholder.markdown(response)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
     
     update_conversation_count()
 
-with shelve.open("data/history/chat_history") as db:
-    db["messages"] = st.session_state.messages
+    save_chat_history(st.session_state.messages)
+    
+st.session_state.needs_cleanup = True
