@@ -1,1 +1,1 @@
-# Aiysha - RAG version 1.0
+# Aiysha - Multimodal RAG App
