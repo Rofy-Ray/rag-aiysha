@@ -2,12 +2,14 @@ import streamlit as st
 import os
 import json
 import logging
+import json
 from PIL import Image
 from llm_interface import get_model_response
 from pdf_processor import process_new_pdfs
-from vector_store import query_vector_store, get_vector_store, cleanup
+from vector_store import query_vector_store, cleanup, get_vector_store
 from dotenv import load_dotenv
 from google.cloud import storage
+from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 load_dotenv()
 
@@ -17,30 +19,31 @@ logger = logging.getLogger(__name__)
 DATA_PATH = "pdf/new/"
 BUCKET_NAME = "aiysha-convos"
 CONVERSATION_TRACK_BLOB = "history/conversations.txt"
-CHAT_HISTORY_BLOB = "history/chat_history.json"
 
 client = storage.Client()
 bucket = client.bucket(BUCKET_NAME)
 
-if 'initialized' not in st.session_state:
-    st.session_state.initialized = False
-    st.session_state.vector_store = None
-
-if not st.session_state.initialized:
-    st.session_state.initialized = True
-    st.session_state.vector_store = get_vector_store()
-
 @st.cache_data
-def load_chat_history():
-    blob = bucket.blob(CHAT_HISTORY_BLOB)
+def get_session_id():
+    return get_script_run_ctx().session_id
+
+def save_chat_history(session_id, messages):
+    blob = bucket.blob(f"history/{session_id}.json")
+    blob.upload_from_string(json.dumps(messages))
+
+def load_chat_history(session_id):
+    blob = bucket.blob(f"history/{session_id}.json")
     if blob.exists():
         return json.loads(blob.download_as_text())
     return []
 
-@st.cache_data
-def save_chat_history(messages):
-    blob = bucket.blob(CHAT_HISTORY_BLOB)
-    blob.upload_from_string(json.dumps(messages))
+@st.cache_resource
+def get_vector_store_wrapper():
+    try:
+        return get_vector_store()
+    except Exception as e:
+        logger.error(f"Failed to initialize vector store: {str(e)}")
+        return None
 
 def check_and_process_new_pdfs():
     blobs = list(bucket.list_blobs(prefix=DATA_PATH))
@@ -115,15 +118,19 @@ with st.sidebar:
 st.title("Aiysha from yShade.AI")
 
 USER_AVATAR = "👤"
-BOT_AVATAR = "🤖"
+BOT_AVATAR = Image.open("images/aiysha_avatar.png")
+
+if "session_id" not in st.session_state:
+    st.session_state.session_id = get_session_id()
 
 if "messages" not in st.session_state:
-    st.session_state.messages = load_chat_history()
+    chat_history = load_chat_history(st.session_state.session_id)
+    st.session_state.messages = chat_history if chat_history else []
 
 with st.sidebar:
     if st.button("Delete Chat History"):
         st.session_state.messages = []
-        save_chat_history([])
+        save_chat_history(st.session_state.session_id, [])
         cleanup()
 
 for message in st.session_state.messages:
@@ -133,6 +140,7 @@ for message in st.session_state.messages:
 
 if prompt := st.chat_input("My name is Aiysha! How can I assist you?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
+    save_chat_history(st.session_state.session_id, st.session_state.messages)
     with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(prompt)
 
@@ -144,16 +152,23 @@ if prompt := st.chat_input("My name is Aiysha! How can I assist you?"):
                     st.info(f"Hold on. {message}")
             except Exception as e:
                 logger.error(f"PDF processing error: {str(e)}", exc_info=True)
+                st.error("An error occurred while processing your request. Please try again later.")
         
         message_placeholder = st.empty()
-        context = query_vector_store(prompt, st.session_state.vector_store)
-        logger.info(f"FETCHED CONTEXT: {context}")
-        with st.spinner(""):
-            response = get_model_response(prompt, context, st.session_state.messages)
-        message_placeholder.markdown(response)
-
-    st.session_state.messages.append({"role": "assistant", "content": response})
-    
-    update_conversation_count()
-
-    save_chat_history(st.session_state.messages)
+        vector_store = get_vector_store_wrapper()
+        if vector_store is not None:
+            try:
+                context = query_vector_store(prompt, vector_store)
+                logger.info(f"FETCHED CONTEXT: {context}")
+                with st.spinner(""):
+                    response = get_model_response(prompt, context, st.session_state.messages)
+                message_placeholder.markdown(response)
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                save_chat_history(st.session_state.session_id, st.session_state.messages)
+                update_conversation_count()
+            except Exception as e:
+                logger.error(f"Error during query or response generation: {str(e)}", exc_info=True)
+                st.error("An error occurred while processing your request. Please try again later.")
+        else:
+            logger.error("Unable to initialize the vector store. Please try again later.")
+            st.error("An error occurred while processing your request. Please try again later.")

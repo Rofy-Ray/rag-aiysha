@@ -5,7 +5,7 @@ import shutil
 from google.cloud import storage
 from functools import lru_cache
 from langchain_chroma import Chroma
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+from langchain_community.embeddings import FastEmbedEmbeddings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,9 +14,24 @@ BUCKET_NAME = "aiysha-convos"
 CHROMA_PATH = "database/"
 LOCAL_TEMP_DIR = tempfile.mkdtemp()
 
-embedding_function = FastEmbedEmbeddings()
 storage_client = storage.Client()
 bucket = storage_client.bucket(BUCKET_NAME)
+
+@lru_cache(maxsize=1)
+def get_embedding_function():
+    try:
+        logger.debug("Initializing FastEmbedEmbeddings")
+        embedding_function = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+        logger.debug("FastEmbedEmbeddings initialized")
+        
+        logger.debug("Testing embed_query")
+        test_embed = embedding_function.embed_query("test")
+        logger.info(f"Embedding function initialized successfully. Test embedding shape: {len(test_embed)}")
+        
+        return embedding_function
+    except Exception as e:
+        logger.error(f"Error initializing embedding function: {str(e)}", exc_info=True)
+        raise
 
 def download_db_from_gcs():
     blobs = bucket.list_blobs(prefix=CHROMA_PATH)
@@ -37,13 +52,28 @@ def upload_db_to_gcs():
 
 @lru_cache(maxsize=1)
 def get_vector_store():
-    if not bucket.blob(f"{CHROMA_PATH}chroma.sqlite3").exists():
-        logger.warning(f"Chroma database not found in GCS at {CHROMA_PATH}. Creating a new one.")
-        db = Chroma(persist_directory=LOCAL_TEMP_DIR, embedding_function=embedding_function)
-    else:
-        download_db_from_gcs()
-        db = Chroma(persist_directory=LOCAL_TEMP_DIR, embedding_function=embedding_function)
-    return db
+    logger.debug("Entering get_vector_store")
+    try:
+        logger.debug("Getting embedding function")
+        embedding_function = get_embedding_function()
+        logger.debug("Embedding function retrieved")
+
+        logger.debug(f"Checking for Chroma database in GCS at {CHROMA_PATH}chroma.sqlite3")
+        if not bucket.blob(f"{CHROMA_PATH}chroma.sqlite3").exists():
+            logger.warning(f"Chroma database not found in GCS at {CHROMA_PATH}. Creating a new one.")
+            logger.debug(f"Initializing Chroma with persist_directory={LOCAL_TEMP_DIR}")
+            db = Chroma(persist_directory=LOCAL_TEMP_DIR, embedding_function=embedding_function)
+        else:
+            logger.debug("Downloading existing database from GCS")
+            download_db_from_gcs()
+            logger.debug(f"Initializing Chroma with persist_directory={LOCAL_TEMP_DIR}")
+            db = Chroma(persist_directory=LOCAL_TEMP_DIR, embedding_function=embedding_function)
+        
+        logger.debug("Vector store initialized successfully")
+        return db
+    except Exception as e:
+        logger.error(f"Error in get_vector_store: {str(e)}", exc_info=True)
+        return None
 
 def add_to_chroma(chunks):
     db = get_vector_store()
@@ -63,13 +93,17 @@ def add_to_chroma(chunks):
 
 def query_vector_store(query: str, db, k: int = 3):
     logger.info(f"Number of documents in the vector store: {db._collection.count()}")
-    results = db.similarity_search_with_score(query, k=k)
-    if not results:
-        logger.warning("No results found for the given query.")
-        return ""
-    logger.info(f"SIMILARITY SEARCH RESULTS: {results}")
-    context = "\n\n".join([doc.page_content for doc, score in results])
-    return context
+    try:
+        results = db.similarity_search_with_score(query, k=k)
+        if not results:
+            logger.warning("No results found for the given query.")
+            return ""
+        logger.info(f"SIMILARITY SEARCH RESULTS: {results}")
+        context = "\n\n".join([doc.page_content for doc, score in results])
+        return context
+    except Exception as e:
+        logger.error(f"Error in query_vector_store: {str(e)}")
+        raise
 
 def clear_database():
     blobs = bucket.list_blobs(prefix=CHROMA_PATH)
