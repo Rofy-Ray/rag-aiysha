@@ -47,7 +47,7 @@ def format_llama_prompt(message: str, context: str, chat_history: list) -> str:
     
 def get_model_response(message: str, context: str, chat_history: list):
     query = format_llama_prompt(message, context, chat_history)
-    logger.info(f"FORMATTED PROMPT: {query}")
+    # logger.info(f"FORMATTED PROMPT: {query}")
     
     client = get_ai_client()
     endpoint = client.endpoint_path(project=PROJECT, location=LOCATION, endpoint=ENDPOINT_ID)
@@ -57,7 +57,7 @@ def get_model_response(message: str, context: str, chat_history: list):
     generated_text = response.predictions[0] if response.predictions else None
     
     if generated_text:
-        logger.info(f"MODEL RESPONSE: {generated_text}")
+        # logger.info(f"MODEL RESPONSE: {generated_text}")
         return generated_text
     else:
         return "I'm sorry, I couldn't generate a response. Please try again."

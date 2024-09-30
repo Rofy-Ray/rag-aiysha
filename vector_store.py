@@ -12,10 +12,28 @@ logger = logging.getLogger(__name__)
 
 BUCKET_NAME = "aiysha-convos"
 CHROMA_PATH = "database/"
-LOCAL_TEMP_DIR = tempfile.mkdtemp()
+DB_DIR = "chroma_db"
+# LOCAL_TEMP_DIR = tempfile.mkdtemp()
 
 storage_client = storage.Client()
 bucket = storage_client.bucket(BUCKET_NAME)
+
+if not os.path.exists(DB_DIR):
+    os.makedirs(DB_DIR)
+
+LOCK_FILE = os.path.join(DB_DIR, "lock")
+
+def acquire_lock():
+    if os.path.exists(LOCK_FILE):
+        logger.warning("Lock file already exists. Waiting for lock to be released.")
+        while os.path.exists(LOCK_FILE):
+            time.sleep(1)
+    with open(LOCK_FILE, "w") as f:
+        f.write("locked")
+
+def release_lock():
+    if os.path.exists(LOCK_FILE):
+        os.remove(LOCK_FILE)
 
 @lru_cache(maxsize=1)
 def get_embedding_function():
@@ -33,13 +51,13 @@ def get_embedding_function():
         logger.error(f"Error initializing embedding function: {str(e)}", exc_info=True)
         raise
 
-def download_db_from_gcs():
+def download_db_from_gcs(local_dir):
     blobs = bucket.list_blobs(prefix=CHROMA_PATH)
     for blob in blobs:
-        local_path = os.path.join(LOCAL_TEMP_DIR, blob.name[len(CHROMA_PATH):])
+        local_path = os.path.join(local_dir, blob.name[len(CHROMA_PATH):])
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         blob.download_to_filename(local_path)
-    logger.info(f"Downloaded Chroma DB from GCS to {LOCAL_TEMP_DIR}")
+    logger.info(f"Downloaded Chroma DB from GCS to {local_dir}")
 
 def upload_db_to_gcs():
     for root, _, files in os.walk(LOCAL_TEMP_DIR):
@@ -52,6 +70,7 @@ def upload_db_to_gcs():
 
 @lru_cache(maxsize=1)
 def get_vector_store():
+    acquire_lock()
     logger.debug("Entering get_vector_store")
     try:
         logger.debug("Getting embedding function")
@@ -61,19 +80,26 @@ def get_vector_store():
         logger.debug(f"Checking for Chroma database in GCS at {CHROMA_PATH}chroma.sqlite3")
         if not bucket.blob(f"{CHROMA_PATH}chroma.sqlite3").exists():
             logger.warning(f"Chroma database not found in GCS at {CHROMA_PATH}. Creating a new one.")
-            logger.debug(f"Initializing Chroma with persist_directory={LOCAL_TEMP_DIR}")
-            db = Chroma(persist_directory=LOCAL_TEMP_DIR, embedding_function=embedding_function)
+            logger.debug(f"Initializing Chroma with persist_directory={DB_DIR}")
+            db = Chroma(persist_directory=DB_DIR, embedding_function=embedding_function)
         else:
             logger.debug("Downloading existing database from GCS")
-            download_db_from_gcs()
-            logger.debug(f"Initializing Chroma with persist_directory={LOCAL_TEMP_DIR}")
-            db = Chroma(persist_directory=LOCAL_TEMP_DIR, embedding_function=embedding_function)
+            download_db_from_gcs(DB_DIR)
+            logger.debug(f"Initializing Chroma with persist_directory={DB_DIR}")
+            db = Chroma(persist_directory=DB_DIR, embedding_function=embedding_function)
+            
+        db_file_path = os.path.join(DB_DIR, "chroma.sqlite3")
+        if not os.path.exists(db_file_path):
+            logger.error(f"Database file not found at {db_file_path}")
+            raise FileNotFoundError(f"Database file not found at {db_file_path}")
         
         logger.debug("Vector store initialized successfully")
         return db
     except Exception as e:
         logger.error(f"Error in get_vector_store: {str(e)}", exc_info=True)
         return None
+    finally:
+        release_lock()
 
 def add_to_chroma(chunks):
     db = get_vector_store()
@@ -92,13 +118,13 @@ def add_to_chroma(chunks):
         logging.info("No new documents to add to the vector store.")
 
 def query_vector_store(query: str, db, k: int = 3):
-    logger.info(f"Number of documents in the vector store: {db._collection.count()}")
+    # logger.info(f"Number of documents in the vector store: {db._collection.count()}")
     try:
         results = db.similarity_search_with_score(query, k=k)
         if not results:
             logger.warning("No results found for the given query.")
             return ""
-        logger.info(f"SIMILARITY SEARCH RESULTS: {results}")
+        # logger.info(f"SIMILARITY SEARCH RESULTS: {results}")
         context = "\n\n".join([doc.page_content for doc, score in results])
         return context
     except Exception as e:
@@ -113,9 +139,9 @@ def clear_database():
     shutil.rmtree(LOCAL_TEMP_DIR)
     logger.info(f"Cleared local temporary directory at {LOCAL_TEMP_DIR}")
 
-def cleanup():
-    if os.path.exists(LOCAL_TEMP_DIR):
-        shutil.rmtree(LOCAL_TEMP_DIR)
-        logger.info(f"Cleaned up temporary directory at {LOCAL_TEMP_DIR}")
-    else:
-        logger.info(f"Temporary directory {LOCAL_TEMP_DIR} does not exist, no cleanup needed")
+# def cleanup():
+#     if os.path.exists(LOCAL_TEMP_DIR):
+#         shutil.rmtree(LOCAL_TEMP_DIR)
+#         logger.info(f"Cleaned up temporary directory at {LOCAL_TEMP_DIR}")
+#     else:
+#         logger.info(f"Temporary directory {LOCAL_TEMP_DIR} does not exist, no cleanup needed")

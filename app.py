@@ -3,13 +3,16 @@ import os
 import json
 import logging
 import json
+import uuid
+import itertools
+import datetime
 from PIL import Image
 from llm_interface import get_model_response
 from pdf_processor import process_new_pdfs
-from vector_store import query_vector_store, cleanup, get_vector_store
+from vector_store import query_vector_store, get_vector_store
 from dotenv import load_dotenv
 from google.cloud import storage
-from streamlit.runtime.scriptrunner import get_script_run_ctx
+from streamlit_session_browser_storage import SessionStorage
 
 load_dotenv()
 
@@ -20,21 +23,37 @@ DATA_PATH = "pdf/new/"
 BUCKET_NAME = "aiysha-convos"
 CONVERSATION_TRACK_BLOB = "history/conversations.txt"
 
-client = storage.Client()
-bucket = client.bucket(BUCKET_NAME)
+bucket = storage.Client().bucket(BUCKET_NAME)
 
-@st.cache_data
-def get_session_id():
-    return get_script_run_ctx().session_id
+st.set_page_config(
+    page_title="Aiysha from yShade.AI",
+    page_icon="images/yshadelogobig.png",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+    menu_items=None  
+)
 
-def save_chat_history(session_id, messages):
-    blob = bucket.blob(f"history/{session_id}.json")
+session_storage = SessionStorage()
+
+def get_chat_history_id():
+    if "chat_history_id" not in st.session_state:
+        chat_history_id = session_storage.getItem("chat_history_id")
+        if not chat_history_id:
+            chat_history_id = str(uuid.uuid4())
+            session_storage.setItem("chat_history_id", chat_history_id) 
+        st.session_state.chat_history_id = chat_history_id
+    return st.session_state.chat_history_id
+
+def save_chat_history(messages):
+    chat_history_id = get_chat_history_id()
+    blob = bucket.blob(f"history/{chat_history_id}.json")
     blob.upload_from_string(json.dumps(messages))
 
-def load_chat_history(session_id):
-    blob = bucket.blob(f"history/{session_id}.json")
+def load_chat_history():
+    chat_history_id = get_chat_history_id()
+    blob = bucket.blob(f"history/{chat_history_id}.json")
     if blob.exists():
-        return json.loads(blob.download_as_text())
+        return json.loads(blob.download_as_string())
     return []
 
 @st.cache_resource
@@ -80,14 +99,6 @@ def update_conversation_count():
         blob.upload_from_string(new_content)
     except Exception as e:
         logger.error(f"Error updating conversation count: {e}")
-    
-st.set_page_config(
-    page_title="Aiysha from yShade.AI",
-    page_icon="images/yshadelogobig.png",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-    menu_items=None  
-)
 
 streamlit_style = """
 			<style>
@@ -120,18 +131,13 @@ st.title("Aiysha from yShade.AI")
 USER_AVATAR = "👤"
 BOT_AVATAR = Image.open("images/aiysha_avatar.png")
 
-if "session_id" not in st.session_state:
-    st.session_state.session_id = get_session_id()
-
 if "messages" not in st.session_state:
-    chat_history = load_chat_history(st.session_state.session_id)
-    st.session_state.messages = chat_history if chat_history else []
+    st.session_state.messages = load_chat_history()
 
 with st.sidebar:
     if st.button("Delete Chat History"):
         st.session_state.messages = []
-        save_chat_history(st.session_state.session_id, [])
-        cleanup()
+        save_chat_history([])
 
 for message in st.session_state.messages:
     avatar = USER_AVATAR if message["role"] == "user" else BOT_AVATAR
@@ -140,7 +146,7 @@ for message in st.session_state.messages:
 
 if prompt := st.chat_input("My name is Aiysha! How can I assist you?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    save_chat_history(st.session_state.session_id, st.session_state.messages)
+    save_chat_history(st.session_state.messages)
     with st.chat_message("user", avatar=USER_AVATAR):
         st.markdown(prompt)
 
@@ -164,7 +170,7 @@ if prompt := st.chat_input("My name is Aiysha! How can I assist you?"):
                     response = get_model_response(prompt, context, st.session_state.messages)
                 message_placeholder.markdown(response)
                 st.session_state.messages.append({"role": "assistant", "content": response})
-                save_chat_history(st.session_state.session_id, st.session_state.messages)
+                save_chat_history(st.session_state.messages)
                 update_conversation_count()
             except Exception as e:
                 logger.error(f"Error during query or response generation: {str(e)}", exc_info=True)
