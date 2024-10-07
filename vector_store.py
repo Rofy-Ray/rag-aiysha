@@ -60,13 +60,13 @@ def download_db_from_gcs(local_dir):
     logger.info(f"Downloaded Chroma DB from GCS to {local_dir}")
 
 def upload_db_to_gcs():
-    for root, _, files in os.walk(LOCAL_TEMP_DIR):
+    for root, _, files in os.walk(DB_DIR):
         for file in files:
             local_path = os.path.join(root, file)
-            relative_path = os.path.relpath(local_path, LOCAL_TEMP_DIR)
+            relative_path = os.path.relpath(local_path, DB_DIR)
             blob = bucket.blob(os.path.join(CHROMA_PATH, relative_path))
             blob.upload_from_filename(local_path)
-    logger.info(f"Uploaded Chroma DB to GCS from {LOCAL_TEMP_DIR}")
+    logger.info(f"Uploaded Chroma DB to GCS from {DB_DIR}")
 
 @lru_cache(maxsize=1)
 def get_vector_store():
