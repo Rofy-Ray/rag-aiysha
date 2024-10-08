@@ -120,17 +120,11 @@ streamlit_style = """
                 .e1f1d6gn5 {
                     position: fixed;
                     bottom: 0;
-                    width: 75%;
+                    width: 100%;
+                    max-width: 75%;
                     justify-content: center;
                     align-items: end;
                     margin-bottom: 0.5rem;
-                }
-                .e1f1d6gn5 .stFileUploader, .e1f1d6gn5 .stAudioInput {
-                    margin-bottom: 3rem;
-                }
-                .e1f1d6gn5 .stTextInput, .e1f1d6gn5 .stButton {
-                    position: absolute;
-                    bottom: 0;
                 }
             </style>
         """
@@ -141,9 +135,13 @@ with st.sidebar:
     logo = load_image("images/yshadelogo.png") 
     st.image(logo, use_column_width=True)
 
+    st.header("Multimedia")
+    image_file = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg", "heic"], accept_multiple_files=False, label_visibility="visible", key="image_input")
+    audio_input = st.experimental_audio_input("Record an audio message", label_visibility="visible", key="audio_input")
+    
     st.header("About Me")
     st.write("""
-    Hi, I'm Aiysha, your AI beauty assistant from yShade.AI, here to help with all your beauty-related questions.\n 
+    Hi, I'm Aiysha, an AI agent, from yShade.AI. I'm here to help with all your beauty-related questions.\n 
     Need steps to recreate a makeup look? I'm at your service!
     """)
 
@@ -176,22 +174,11 @@ for message in st.session_state.messages:
             if message.get("image"):
                 st.image(message["image"], width=200)
 
-row_top = st.columns([1,1])
-row_bottom = st.columns([9,1])
-
-container = st.container()
-with container:
-    with row_top[0]:
-        image_file = st.file_uploader(" ", type=["png", "jpg", "jpeg", "heic"], accept_multiple_files=False, label_visibility="collapsed", key="image_input")
-
-    with row_top[1]:
-        audio_input = st.experimental_audio_input(" ", label_visibility="collapsed", key="audio_input")
-
-    with row_bottom[0]:
-        prompt = st.text_input(" ", placeholder="My name is Aiysha! How can I assist you?", key="chat_input")
-
-    with row_bottom[1]:
-        send_button = st.button("", icon=":material/send:", disabled=not prompt and not audio_input)     
+_, c1, c2, _ = st.columns([1,9.5,0.5,1])
+with c1:
+    prompt = st.text_input("Send 🖼️ (with text⬇) or 🎙️ in sidebar", placeholder="My name is Aiysha! How can I assist you?", key="chat_input")
+with c2:
+    send_button = st.button("", icon=":material/send:", disabled=not prompt and not audio_input)
 
 if send_button or audio_input:
     user_input = prompt
