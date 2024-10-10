@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 DATA_PATH = "pdf/new/"
 BUCKET_NAME = "aiysha-convos"
-CONVERSATION_TRACK_BLOB = "history/conversations.txt"
+CONVERSATION_TRACK_BLOB = "history/count/conversations.txt"
 
 bucket = storage.Client().bucket(BUCKET_NAME)
 
@@ -45,12 +45,12 @@ def get_chat_history_id():
 
 def save_chat_history(messages):
     chat_history_id = get_chat_history_id()
-    blob = bucket.blob(f"history/{chat_history_id}.json")
+    blob = bucket.blob(f"history/chats/{chat_history_id}.json")
     blob.upload_from_string(json.dumps(messages))
 
 def load_chat_history():
     chat_history_id = get_chat_history_id()
-    blob = bucket.blob(f"history/{chat_history_id}.json")
+    blob = bucket.blob(f"history/chats/{chat_history_id}.json")
     if blob.exists():
         return json.loads(blob.download_as_string())
     return []
@@ -195,16 +195,16 @@ if send_button or audio_input:
                 user_audio_url = upload_audio_to_gcs(audio_bytes)
         except Exception as e:
             logger.error(f"Error in ASR request: {str(e)}")
-            st.error("An error occurred while processing your request. Please try again later.")
+            st.error("Oops, it looks like I didn't quite catch that! Can you please try speaking again, or maybe enunciate a bit more for me? I want to make sure I get your beauty question just right!")
             st.stop()
 
     if image_file:
         gcs_image_uri, public_image_url = upload_image_to_gcs(image_file)
 
     if audio_input:
-        st.session_state.messages.append({"role": "user", "content": user_input, "audio": user_audio_url})
+        st.session_state.messages.append({"role": "user", "content": f"{user_input}\nAudio: {user_audio_url}"})
     else:
-        st.session_state.messages.append({"role": "user", "content": user_input, "image": public_image_url})
+        st.session_state.messages.append({"role": "user", "content": f"{user_input}\nImage: {public_image_url}"})
     save_chat_history(st.session_state.messages)
     
     with st.chat_message("user", avatar=USER_AVATAR):
@@ -223,7 +223,7 @@ if send_button or audio_input:
                     st.info(f"Hold on. {message}")
             except Exception as e:
                 logger.error(f"PDF processing error: {str(e)}", exc_info=True)
-                st.error("An error occurred while processing your request. Please try again later.")
+                st.error("Ah, it looks like I'm having a bit of a beauty brain freeze! Don't worry, I'll get my thoughts together in a minute. Can you please try again, and I'll do my best to get back to you with some fabulous advice?")
 
         message_placeholder = st.empty()
         vector_store = get_vector_store_wrapper()
@@ -241,9 +241,9 @@ if send_button or audio_input:
                         audio_response_url = text_to_speech(response)
                     except Exception as e:
                         logger.error(f"Error in TTS request: {str(e)}")
-                        st.error("An error occurred while processing your request. Please try again later.")
+                        st.error("Oh no, it looks like I've lost my voice! Don't worry, I'll try to get my vocal cords warmed up again. Can you please try once more, and I'll do my best to give you a beautiful response?")
                         st.stop()
-                    st.session_state.messages.append({"role": "assistant", "content": response, "audio": audio_response_url}) 
+                    st.session_state.messages.append({"role": "assistant", "content": f"{response}\nAudio: {audio_response_url}"}) 
                     save_chat_history(st.session_state.messages)
                     st.audio(data=audio_response_url, format="audio/wav", autoplay=True, start_time=0) 
                 else:
@@ -253,7 +253,7 @@ if send_button or audio_input:
                 update_conversation_count()
             except Exception as e:
                 logger.error(f"Error during query or response generation: {str(e)}", exc_info=True)
-                st.error("An error occurred while processing your request. Please try again later.")
+                st.error("Hmm, it looks like something's gone awry in our beauty conversation! Don't worry, I'll get my makeup bag in order and try again. Can you please give me another chance to help you with your question?")
         else:
             logger.error("Unable to initialize the vector store. Please try again later.")
-            st.error("An error occurred while processing your request. Please try again later.")
+            st.error("Uh-oh, it looks like my beauty brain trust is temporarily unavailable! Don't worry, I'll get my knowledge base back online in no time. Can you please try again later, and I'll be happy to help you with your beauty question?")
