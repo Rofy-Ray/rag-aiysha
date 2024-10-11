@@ -1,6 +1,6 @@
 import os
 import logging
-import tempfile
+# import tempfile
 import shutil
 from google.cloud import storage
 from functools import lru_cache

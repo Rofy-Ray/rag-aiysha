@@ -4,8 +4,8 @@ import logging
 import openai
 import streamlit as st
 from google.cloud import aiplatform
-from google.protobuf import json_format
-from google.protobuf.struct_pb2 import Value
+# from google.protobuf import json_format
+# from google.protobuf.struct_pb2 import Value
 from google.auth import default, transport
 from dotenv import load_dotenv
 
