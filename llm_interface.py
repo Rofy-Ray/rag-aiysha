@@ -85,11 +85,27 @@ def get_openai_client(is_image_model=False):
 #     client = get_ai_client()
 #     endpoint = client.endpoint_path(project=PROJECT, location=LOCATION, endpoint=ENDPOINT_ID)
     
-#     instances = [{"inputs": query, "parameters": {"max_tokens": 4096, "temperature": 0}}]
-#     response = client.predict(endpoint=endpoint, instances=instances)
+#     # instances = [{"inputs": query, "parameters": {"max_tokens": 4096, "temperature": 0}}]
+#     # response = client.predict(endpoint=endpoint, instances=instances)
     
-#     # logger.info(f"MODEL RESPONSE: {response}")
-#     generated_text = response.predictions[0] if response.predictions else None
+#     instances = [{"prompt": query}]
+#     response = client.predict(endpoint=endpoint, instances=instances, parameters={"max_new_tokens": 2048, "temperature": 0, "truncation": False, "return_full_text": True})
+    
+#     logger.info(f"MODEL RESPONSE: {response}") 
+    
+#     if response.predictions:
+#         output_text = response.predictions[0]
+#         pattern = r"Output:\s*(.*)$"
+#         match = re.search(pattern, output_text, re.DOTALL)
+#         if match:
+#             generated_text = match.group(1).strip()
+#         else:
+#             generated_text = None
+#     else:
+#         generated_text = None
+        
+#     # generated_text = response.predictions[0][0] if response.predictions else None
+#     # generated_text = response.predictions[0] if response.predictions else None
     
 #     if generated_text:        
 #         # logger.info(f"MODEL OUTPUT: {generated_text}")
@@ -120,7 +136,7 @@ def get_text_response(message: str, context: str, chat_history: list):
     
     try:
         response = client.chat.completions.create(
-            model="meta/llama3-405b-instruct-maas",
+            model="meta/llama-3.1-405b-instruct-maas",
             messages=messages,
             max_tokens=4096,
         )
