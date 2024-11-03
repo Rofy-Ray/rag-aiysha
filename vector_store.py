@@ -39,11 +39,11 @@ def release_lock():
 def get_embedding_function():
     try:
         logger.debug("Initializing FastEmbedEmbeddings")
-        embedding_function = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+        embedding_function = FastEmbedEmbeddings(model_name="BAAI/bge-large-en-v1.5")
         logger.debug("FastEmbedEmbeddings initialized")
         
         logger.debug("Testing embed_query")
-        test_embed = embedding_function.embed_query("test")
+        test_embed = embedding_function.embed_query(text="test")
         logger.info(f"Embedding function initialized successfully. Test embedding shape: {len(test_embed)}")
         
         return embedding_function
@@ -111,8 +111,13 @@ def add_to_chroma(chunks):
 
     if new_chunks:
         logger.info(f"Adding {len(new_chunks)} new documents to the vector store.")
-        new_chunk_ids = [chunk.metadata["id"] for chunk in new_chunks]
-        db.add_documents(new_chunks, ids=new_chunk_ids)
+        max_batch_size = 5000
+        batches = [new_chunks[i:i+max_batch_size] for i in range(0, len(new_chunks), max_batch_size)]
+        for batch in batches:
+            batch_ids = [chunk.metadata["id"] for chunk in batch]
+            db.add_documents(batch, ids=batch_ids)
+        # new_chunk_ids = [chunk.metadata["id"] for chunk in new_chunks]
+        # db.add_documents(new_chunks, ids=new_chunk_ids)
         upload_db_to_gcs()
     else:
         logging.info("No new documents to add to the vector store.")
