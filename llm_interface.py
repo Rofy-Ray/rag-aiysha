@@ -1,9 +1,9 @@
 import os
-import re
+# import re
 import logging
 import openai
 import streamlit as st
-from google.cloud import aiplatform
+# from google.cloud import aiplatform
 # from google.protobuf import json_format
 # from google.protobuf.struct_pb2 import Value
 from google.auth import default, transport
@@ -39,9 +39,9 @@ PROJECT_NUMBER = os.getenv("PROJECT_NUMBER")
 #         api_key=credentials.token
 #     )
     
-@st.cache_resource
+@st.cache_resource(ttl=3600)
 def get_openai_client(is_image_model=False):
-    credentials, _ = default()
+    credentials, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
     auth_request = transport.requests.Request()
     credentials.refresh(auth_request)
     
@@ -55,6 +55,7 @@ def get_openai_client(is_image_model=False):
         base_url=base_url,
         api_key=credentials.token
     )
+
 
 # SYSTEM_PROMPT = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 # You are a makeup artist and beauty advisor named Aiysha. You apply cosmetics on clients to enhance features, create looks and styles according to the latest trends in beauty and fashion. 
