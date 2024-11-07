@@ -4,6 +4,8 @@ import json
 import logging
 import json
 import uuid
+import requests
+from io import BytesIO
 from PIL import Image
 from llm_interface import get_text_response, get_image_response
 from pdf_processor import process_new_pdfs
@@ -74,9 +76,15 @@ def check_and_process_new_pdfs():
         return False, ""
 
 @st.cache_data
-def load_image(image_path, size=(150, 150)):
+def load_sidebar_logo(image_path, size=(150, 150)):
     img = Image.open(image_path)
     return img
+
+def load_image_from_url(url: str) -> Image:
+    response = requests.get(url, stream=True)
+    response.raise_for_status() 
+    image = Image.open(BytesIO(response.content))
+    return image
 
 def update_conversation_count():
     blob = bucket.blob(CONVERSATION_TRACK_BLOB)
@@ -132,7 +140,7 @@ streamlit_style = """
 st.markdown(streamlit_style, unsafe_allow_html=True)
 
 with st.sidebar:
-    logo = load_image("images/yshadelogo.png") 
+    logo = load_sidebar_logo("images/yshadelogo.png") 
     st.image(logo, use_column_width=True)
 
     st.header("Multimedia")
@@ -167,12 +175,13 @@ for message in st.session_state.messages:
     avatar = USER_AVATAR if message["role"] == "user" else BOT_AVATAR
     with st.chat_message(message["role"], avatar=avatar):
         if message.get("audio"):
+            st.markdown(message["content"])
             st.audio(message["audio"])
+        elif message.get("image"):
+            st.markdown(message["content"])
+            st.image(message["image"], width=200)
         else:
-            if message.get("content"):
-                st.markdown(message["content"])
-            if message.get("image"):
-                st.image(message["image"], width=200)
+            st.markdown(message["content"])
 
 _, c1, c2, _ = st.columns([1,9.5,0.5,1])
 with c1:
@@ -202,9 +211,20 @@ if send_button or audio_input:
         gcs_image_uri, public_image_url = upload_image_to_gcs(image_file)
 
     if audio_input:
-        st.session_state.messages.append({"role": "user", "content": f"{user_input}\nAudio: {user_audio_url}"})
+        st.session_state.messages.append({
+            "role": "user",
+            "content": user_input,
+            "audio": user_audio_url if user_audio_url else None,
+            "image": None
+        })
     else:
-        st.session_state.messages.append({"role": "user", "content": f"{user_input}\nImage: {public_image_url}"})
+        st.session_state.messages.append({
+            "role": "user",
+            "content": user_input,
+            "audio": None,
+            "image": public_image_url if public_image_url else None
+        })
+        
     save_chat_history(st.session_state.messages)
     
     with st.chat_message("user", avatar=USER_AVATAR):
@@ -243,12 +263,12 @@ if send_button or audio_input:
                         logger.error(f"Error in TTS request: {str(e)}")
                         st.error("Oh no, it looks like I've lost my voice! Don't worry, I'll try to get my vocal cords warmed up again. Can you please try once more, and I'll do my best to give you a beautiful response?")
                         st.stop()
-                    st.session_state.messages.append({"role": "assistant", "content": f"{response}\nAudio: {audio_response_url}"}) 
+                    st.session_state.messages.append({"role": "assistant", "content": response, "audio": audio_response_url, "image": None}) 
                     save_chat_history(st.session_state.messages)
                     st.audio(data=audio_response_url, format="audio/wav", autoplay=True, start_time=0) 
                 else:
                     message_placeholder.markdown(response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    st.session_state.messages.append({"role": "assistant", "content": response, "audio": None, "image": None})
                     save_chat_history(st.session_state.messages)
                 update_conversation_count()
             except Exception as e:
